@@ -41,7 +41,7 @@ def recursiveFetcher(baseUrl, goDownSteps):
         # Fetch resource from url
         fetchTimeBase = time.time()
         r = requests.get(baseUrl)
-        fetchTimeBase = time.time() - fetchTime
+        fetchTimeBase = time.time() - fetchTimeBase
         baseStatus = r.status_code
         baseStatusMsg = http.client.responses[baseStatus]
 
@@ -56,6 +56,10 @@ def recursiveFetcher(baseUrl, goDownSteps):
         print (f'Base url: "{baseUrl}" {baseStatus} {baseStatusMsg} "{pageTitle}" Fetch time: {fetchTimeBase:.2f} seconds')
 
         # Find and fetch all links in document, depth first
+
+        linkList = parsed("a")
+        print (linkList)
+
         for l in parsed("a"):
 
             try:
@@ -90,8 +94,6 @@ def recursiveFetcher(baseUrl, goDownSteps):
                 print (f'Error joining url and path')
         return r
 
-
-
 def simpleTest(baseUrl):
     print (f'Testing urls in {baseUrl}')
 
@@ -113,17 +115,68 @@ def simpleTest(baseUrl):
 
     print (f'Base url: "{baseUrl}" {baseStatus} {baseStatusMsg} {pageTitle}')
 
-    for l in parsed("a"):
-        try:
-            tag = l.string
-            # print (type(tag))
-            tag = tag.replace('\n', '')
-            tag = tag.replace('\r', '')
-            tag = tag.strip()
-        except:
-            pass
+    linkList = parsed("a")
+    imgList = parsed('img')
+    scriptList = parsed('script')
+    styleList = parsed('link')
 
-        link = l.get('href')
+
+    print("\n")
+
+    print (f'hrefs: {len(linkList)}')
+    print (f'imgs: {len(imgList)}')
+    print (f'styles: {len(styleList)}')
+    print (f'scripts: {len(scriptList)}')
+
+    print ("\n\n\n")
+
+    linkList = set(map (lambda l: l.get('href'), linkList))
+    imgList = set(map (lambda l: l.get('src'), imgList))
+    scriptList = set(map (lambda l: l.get('src'), scriptList))
+    styleList = set(map (lambda l: l.get('href'), styleList))
+
+
+    print (f'hrefs (unique): {len(linkList)}')
+    print (f'imgs (unique): {len(imgList)}')
+    print (f'styles (unique): {len(styleList)}')
+    print (f'scripts (unique): {len(scriptList)}')
+
+
+
+    print ("\n\n\n")
+
+    # Create one set with all links
+    allLinks = set()
+    allLinks.update(linkList)
+    allLinks.update(imgList)
+    allLinks.update(scriptList)
+    allLinks.update(styleList)
+    
+    # Filter the None value if present
+    allLinks = list(set(filter(lambda n: n is not None, allLinks)))
+
+
+    loopStart = time.time()
+
+    print (f'Testing {len(allLinks)} links:\n')
+    print ("-----------------------------------------------------")
+    sys.stdout.flush()
+    for l in allLinks:
+        if l is None:
+            continue
+
+        tag = "map"
+        # try:
+        #     tag = l.string
+        #     # print (type(tag))
+        #     tag = tag.replace('\n', '')
+        #     tag = tag.replace('\r', '')
+        #     tag = tag.strip()
+        # except:
+        #     pass
+
+        # link = l.get('href')
+        link = l
         url = urljoin(baseUrl, link)
         if baseUrl not in url:
             print (f'[Skipping {url}]')
@@ -141,11 +194,17 @@ def simpleTest(baseUrl):
 
         except:
             print (f'[{link} could not be fetched]')
+        sys.stdout.flush()
 
-    elapsed = time.time() - start_time
-    print (f'Tests performed in a total of {elapsed:.2f} seconds')
+    
 
+    print ("-----------------------------------------------------")
 
+    print(f'\nLoop ended in {time.time() - loopStart:.2f} seconds')
+    print (f'\n\nTests performed in a total of {time.time() - start_time:.2f} seconds')
+    print ("\n\n\n")
+
+print ("Call to simpleTest...")
 simpleTest(sys.argv[1])
 
 
