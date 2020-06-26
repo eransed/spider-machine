@@ -30,6 +30,8 @@ from bs4 import BeautifulSoup
 # print ("world")
 
 # take arg -urlLinks for printing one url per newline?
+# <img class="someClass" src="/relative/path/file.png" alt="text-if-not-found">
+# <script src="/script.js"></script>
 
 def recursiveFetcher(baseUrl, goDownSteps):
     if goDownSteps < 0:
@@ -67,19 +69,25 @@ def recursiveFetcher(baseUrl, goDownSteps):
 
             link = l.get('href')
             url = urljoin(baseUrl, link)
-            if baseUrl not in url:
-                print (f'[Skipping {url}]')
-                continue
-            try:
-                fetchTime = time.time()
-                res = recursiveFetcher(url, goDownSteps - 1)
-                fetchTime = time.time() - fetchTime
 
-                code = res.status_code
-                msg = http.client.responses[code]
-                print (f'{code} {msg} {len(res.content): 9d} {fetchTime: 9.2f}s\t\t[ {link} ] ( {tag} )')
-            except:
-                print (f'[{link} could not be fetched]')
+            if url not is None:
+
+                if baseUrl not in url:
+                    print (f'[Skipping {url}]')
+                    continue
+                try:
+                    fetchTime = time.time()
+                    res = recursiveFetcher(url, goDownSteps - 1)
+                    fetchTime = time.time() - fetchTime
+
+                    code = res.status_code
+                    msg = http.client.responses[code]
+                    print (f'{code} {msg} {len(res.content): 9d} {fetchTime: 9.2f}s\t\t[ {link} ] ( {tag} )')
+                except:
+                    print (f'[{link} could not be fetched]')
+
+            else:
+                print (f'Error joining url and path')
         return r
 
 
