@@ -17,6 +17,7 @@ class Result:
     fetchTime = -1
     message = "__NONE__"
     depth = -1
+    subLinks = -1
 
     # def __hash__(self):
     #     return hash( tuple(self.url, self.httpCode, self.httpMessage, self.urlengthl, self.fetchTime, self.message, self.depth) )
@@ -32,7 +33,7 @@ class Result:
 
 
     def __str__(self):
-        return f'{self.httpCode: 4d} {http.client.responses[self.httpCode]:<20}{self.length: 7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}]\t[ {self.url} ] ( {self.message} )'
+        return f'{self.httpCode: 4d} {http.client.responses[self.httpCode]:<20}{self.length: 7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{self.subLinks: 4d}]\t[ {self.url} ] ( {self.message} )'
 
 
 def getHost(url):
@@ -46,7 +47,7 @@ def removeNewlineAndTrim(string):
     string = string.strip()
     return string
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, callCount):
 
     sys.stdout.flush()
 
@@ -59,6 +60,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
 
     # THE TEST OF THE URL
     r = requests.get(baseUrl)
+    print('1', end='', flush=True)
     result = Result()
     result.url = baseUrl
     result.depth = goDownSteps
@@ -71,6 +73,8 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
 
     try:
         parsed = BeautifulSoup(r.content, 'html.parser')
+        print('2', end='', flush=True)
+
 
         if parsed is not None:
             pageTitle = parsed.title.string
@@ -118,6 +122,11 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
     # Filter the None value if present
     allLinks = list(set(filter(lambda n: n is not None, allLinks)))
 
+    result.subLinks = len(allLinks)
+
+    print('3', end='', flush=True)
+
+
     for link in allLinks:
 
         if link is None:
@@ -132,11 +141,14 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
         try:
             # RECURSIVE CALL
             resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet)
+            
 
         except Exception as e:
             result.message = f'[Could not be fetched: {str(e)}]'
             resultsSet.add (result)
 
+
+    print('4', end='', flush=True)
     return resultsSet
 
 
