@@ -145,7 +145,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
             sys.stdout.flush()
 
             # RECURSIVE CALL
-            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet)
+            resultsSet.update(recursiveFetcher(url, goDownSteps - 1, resultsSet))
             
         except Exception as e:
             result.message = f'[Could not be fetched: {str(e)}]'
