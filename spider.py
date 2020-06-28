@@ -151,7 +151,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
         except Exception as e:
             r.message = f'[Could not be fetched: {str(e)}]'
 
-    resultSet.add(r)
+    resultsSet.add(r)
 
     return resultsSet
 
