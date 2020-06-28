@@ -12,6 +12,36 @@ from functools import reduce
 # OWN
 import log
 
+def space(count):
+    s = ""
+    for _ in range(count):
+        s = s + " "
+
+    return s
+
+
+def getHost(url):
+    url_parsed = urlparse(url)
+    host = "{uri.scheme}://{uri.netloc}/".format(uri=url_parsed)
+    return host
+
+def getPath(url):
+    url_parsed = urlparse(url)
+    path = "{uri.path}".format(uri=url_parsed)
+    return path
+
+def getQuery(url):
+    url_parsed = urlparse(url)
+    q = "{uri.query}".format(uri=url_parsed)
+    return q
+
+def removeNewlineAndTrim(string):
+    string = string.replace('\n', '')
+    string = string.replace('\r', '')
+    string = string.strip()
+    return string
+
+
 class Result:
     url = None
     httpCode = -1
@@ -21,9 +51,13 @@ class Result:
     message = "__NONE__"
     depth = -1
     subLinks = set()
+    stepsFromRoot = -1
 
     # def __hash__(self):
     #     return hash( tuple(self.url, self.httpCode, self.httpMessage, self.urlengthl, self.fetchTime, self.message, self.depth) )
+
+    def httpStatus(self):
+        return f'{self.httpCode} {http.client.responses[self.httpCode]}'
 
     def __hash__(self):
         return hash(self.url)
@@ -36,20 +70,8 @@ class Result:
 
 
     def __str__(self):
-        return f'{self.httpCode: 4d} {http.client.responses[self.httpCode]:<20}{self.length: 7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}]\t[ {self.url} ] ( {self.message} )'
+        return space(self.stepsFromRoot * 2) + f'{self.httpCode: 4d} {http.client.responses[self.httpCode]:<20}{self.length: 7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}]\t[ {getPath(self.url)}{getQuery(self.url)} ] ( {self.message} )'
 
-
-def getHost(url):
-    url_parsed = urlparse(url)
-    host = "{uri.scheme}://{uri.netloc}/".format(uri=url_parsed)
-    return host
-
-
-def removeNewlineAndTrim(string):
-    string = string.replace('\n', '')
-    string = string.replace('\r', '')
-    string = string.strip()
-    return string
 
 
 # Takes a html-doc and returns a set of the included links
@@ -101,6 +123,7 @@ def urlTest(url):
         result.fetchTime = time.time() - fetchTime
         result.httpCode = r.status_code
         result.subLinks = linkSetParser(r.content)
+        result.length =len(r.content)
     except Exception as e:
         log.error(str(e))
         result.message = str(e)
@@ -110,52 +133,63 @@ def urlTest(url):
 
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (baseUrl, depth, urls):
+def threadedFetcher (baseUrl, depth, urls, stepsFromRoot):
     r = urlTest(baseUrl)
+    log.info( f'{r.httpStatus()} - {baseUrl}' )
     urls.add(baseUrl)
     r.depth = depth
+    r.stepsFromRoot = stepsFromRoot
     resultSet = set()
     resultSet.add(r)
     for link in r.subLinks:
         if link is None:
             continue
 
+        if link in urls:
+            continue
+
         url = urljoin(baseUrl, link)
 
         if getHost(baseUrl) not in getHost(url) and baseUrl != url:
             # resultsList.append (f'[{getHost(baseUrl)} not in {getHost(url)}]')
-            log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
+            # log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
             continue
 
-        log.good(f'Fetching sublinks for {url}')
-        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls)
+        # log.good(f'Fetching sublinks for {url}')
+        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1)
 
     return resultSet
 
 
 
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls):
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot):
 
     # BASE CASE
     if goDownSteps < 1:
-        log.info("Reached final depth")
+        # log.info("Reached final depth")
         return resultsSet
 
     if baseUrl in urls:
-        log.info(f'Already checked {baseUrl}')
+        # log.info(f'Already checked {baseUrl}')
         return resultsSet
 
     # THE TEST OF THE URL
     r = urlTest(baseUrl)
+    log.info( f'{r.httpStatus()} - {getPath(baseUrl)}{getQuery(baseUrl)}' )
 
     urls.add(baseUrl)
+
+    r.stepsFromRoot = stepsFromRoot
 
     r.depth = goDownSteps
 
     for link in r.subLinks:
 
         if link is None:
+            continue
+
+        if link in urls:
             continue
 
         url = urljoin(baseUrl, link)
@@ -166,11 +200,10 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls):
             continue
 
         try:
-            sys.stdout.flush()
 
             # RECURSIVE CALL
-            log.info(f'Fetching sublinks at depth {goDownSteps} for {url}')
-            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls)
+            # log.info(f'Fetching sublinks at depth {goDownSteps} for {url}')
+            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls, stepsFromRoot + 1)
             
         except Exception as e:
             log.error(str(e))
@@ -187,13 +220,15 @@ def main():
     try:
         totalTime = time.time()
         urls = set()
-        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls )
+        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0 )
         # print (f'{len(results)} links was tested in {time.time() - totalTime:.2f} seconds:')
         print ("-----------------------------------------------------")
-        print ( "\n".join( list( map( lambda r: str( r ), results ) ) ) )
+        resSort = list(results)
+        resSort.sort(key=lambda x: x.depth, reverse=True)
+        print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
         print ("-----------------------------------------------------")
         elapsed = time.time() - totalTime
-        print (f'{len(results)} link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
+        print (f'{len(resSort)} link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
 
         average = sum(r.fetchTime for r in results) / len (results)
         print (f'{len(urls)} unique link(s)')
