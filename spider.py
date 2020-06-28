@@ -1,4 +1,4 @@
-
+# STD
 import sys
 import time
 import requests
@@ -8,6 +8,10 @@ import http.client
 from bs4 import BeautifulSoup
 import math
 from functools import reduce
+
+# OWN
+import log
+
 
 class Result:
     url = None
@@ -175,5 +179,11 @@ def main():
         print ("Usage: python spider.py <url> <max-depth>")
         exit(1)
 
+def afunc():
+    log.good("This is good")
+
 if __name__ == '__main__':
-    main()
+    # main()
+    log.info("Hello from spider.py")
+    afunc()
+    log._test()
