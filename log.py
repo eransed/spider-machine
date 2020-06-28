@@ -23,7 +23,8 @@ def bg(fg_code):
 def ansi_esc(code, format):
     return f'\033[{code}m{format}\033[m'
 
-def _printer(style, format):
+def _printer(style, format, enabled = True):
+    if enabled == False: return
     start = time.time()
     t = time.strftime('%H:%M:%S', time.localtime(time.time()))
     try:
@@ -36,7 +37,8 @@ def _printer(style, format):
     finally:
         del frame
 
-    print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}][{t}({time.time() - start:.3f})][{module}.{function}:{line}] {format}') )
+    # Only one print call in this module
+    print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}][{t} ({time.time() - start:.3f}s)][{module}.{function}:{line}] {format}'), flush=True)
 
 def info(format):
     _printer(Style.NORMAL, format)
@@ -45,7 +47,7 @@ def good(format):
     _printer(Style.GREEN, format)
 
 def warn(format):
-    _printer(Style.YELLOW, format)
+    _printer(Style.YELLOW, format, False)
 
 def error(format):
     _printer(Style.RED, format)

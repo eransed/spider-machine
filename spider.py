@@ -12,7 +12,6 @@ from functools import reduce
 # OWN
 import log
 
-
 class Result:
     url = None
     httpCode = -1
@@ -55,7 +54,6 @@ def removeNewlineAndTrim(string):
 
 # Takes a html-doc and returns a set of the included links
 def linkSetParser(doc):
-    print('3', end='', flush=True)
 
     try:
         parsed = BeautifulSoup(doc, 'html.parser')
@@ -74,7 +72,7 @@ def linkSetParser(doc):
         # Create one set with all links
         allLinks = set()
         allLinks.update(linkList)
-        allLinks.update(imgList)
+        # allLinks.update(imgList)
         allLinks.update(scriptList)
         allLinks.update(styleList)
         
@@ -84,11 +82,10 @@ def linkSetParser(doc):
         return allLinks
 
     except Exception as e:
-        print (str(e))
+        log.error(str(e))
         return set()
 
 def urlTest(url):
-    print('2', end='', flush=True)
 
     result = Result()
     result.url = url
@@ -105,6 +102,7 @@ def urlTest(url):
         result.httpCode = r.status_code
         result.subLinks = linkSetParser(r.content)
     except Exception as e:
+        log.error(str(e))
         result.message = str(e)
     
     return result
@@ -112,28 +110,48 @@ def urlTest(url):
 
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (url, depth):
-    print('1', end='', flush=True)
-    r = urlTest(url)
+def threadedFetcher (baseUrl, depth, urls):
+    r = urlTest(baseUrl)
+    urls.add(baseUrl)
+    r.depth = depth
     resultSet = set()
     resultSet.add(r)
     for link in r.subLinks:
-        resultSet = recursiveFetcher(link, depth, resultSet)
+        if link is None:
+            continue
+
+        url = urljoin(baseUrl, link)
+
+        if getHost(baseUrl) not in getHost(url) and baseUrl != url:
+            # resultsList.append (f'[{getHost(baseUrl)} not in {getHost(url)}]')
+            log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
+            continue
+
+        log.good(f'Fetching sublinks for {url}')
+        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls)
 
     return resultSet
 
 
 
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
-    print('4', end='', flush=True)
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls):
 
     # BASE CASE
     if goDownSteps < 1:
+        log.info("Reached final depth")
+        return resultsSet
+
+    if baseUrl in urls:
+        log.info(f'Already checked {baseUrl}')
         return resultsSet
 
     # THE TEST OF THE URL
     r = urlTest(baseUrl)
+
+    urls.add(baseUrl)
+
+    r.depth = goDownSteps
 
     for link in r.subLinks:
 
@@ -142,17 +160,20 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
 
         url = urljoin(baseUrl, link)
 
-        if getHost(baseUrl) not in getHost(url):
+        if getHost(baseUrl) not in getHost(url) and baseUrl != url:
             # resultsList.append (f'[{getHost(baseUrl)} not in {getHost(url)}]')
+            log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
             continue
 
         try:
             sys.stdout.flush()
 
             # RECURSIVE CALL
-            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet)
+            log.info(f'Fetching sublinks at depth {goDownSteps} for {url}')
+            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls)
             
         except Exception as e:
+            log.error(str(e))
             r.message = f'[Could not be fetched: {str(e)}]'
 
     resultsSet.add(r)
@@ -162,16 +183,20 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
 
 
 def main():
+
     try:
         totalTime = time.time()
-        results = threadedFetcher( sys.argv[1], int(sys.argv[2]) )
+        urls = set()
+        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls )
         # print (f'{len(results)} links was tested in {time.time() - totalTime:.2f} seconds:')
         print ("-----------------------------------------------------")
         print ( "\n".join( list( map( lambda r: str( r ), results ) ) ) )
         print ("-----------------------------------------------------")
-        print (f'{len(results)} link(s) was tested in {time.time() - totalTime:.2f} seconds:')
+        elapsed = time.time() - totalTime
+        print (f'{len(results)} link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
 
         average = sum(r.fetchTime for r in results) / len (results)
+        print (f'{len(urls)} unique link(s)')
         print (f'Average fetch time {average:.2f} seconds')
 
     except Exception as e:
@@ -179,11 +204,7 @@ def main():
         print ("Usage: python spider.py <url> <max-depth>")
         exit(1)
 
-def afunc():
-    log.good("This is good")
 
 if __name__ == '__main__':
-    # main()
-    log.info("Hello from spider.py")
-    afunc()
-    log._test()
+    main()
+
