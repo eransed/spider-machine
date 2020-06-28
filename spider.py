@@ -111,7 +111,8 @@ def urlTest(url):
 def threadedFetcher (url, depth):
     print('1', end='', flush=True)
     r = urlTest(url)
-    resultSet = set(r)
+    resultSet = set()
+    resultSet.add(r)
     for link in r.subLinks:
         resultSet = recursiveFetcher(link, depth, resultSet)
 
