@@ -111,7 +111,7 @@ def urlTest(url):
 def threadedFetcher (url, depth):
     print('1', end='', flush=True)
     r = urlTest(url)
-    resultSet = set()
+    resultSet = set(r)
     for link in r.subLinks:
         resultSet.update(recursiveFetcher(link, depth, resultSet))
 
@@ -148,8 +148,9 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet):
             resultsSet.update(recursiveFetcher(url, goDownSteps - 1, resultsSet))
             
         except Exception as e:
-            result.message = f'[Could not be fetched: {str(e)}]'
-            resultsSet.add (result)
+            r.message = f'[Could not be fetched: {str(e)}]'
+
+    resultSet.add(r)
 
     return resultsSet
 
