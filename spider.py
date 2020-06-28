@@ -13,9 +13,12 @@ from functools import reduce
 import log
 
 def space(count):
+    return charRepet(count, " ")
+
+def charRepet(count, char):
     s = ""
     for _ in range(count):
-        s = s + " "
+        s = s + char
 
     return s
 
@@ -23,17 +26,17 @@ def space(count):
 def getHost(url):
     url_parsed = urlparse(url)
     host = "{uri.scheme}://{uri.netloc}/".format(uri=url_parsed)
-    return host
+    return str(host)
 
 def getPath(url):
     url_parsed = urlparse(url)
     path = "{uri.path}".format(uri=url_parsed)
-    return path
+    return str(path)
 
 def getQuery(url):
     url_parsed = urlparse(url)
     q = "{uri.query}".format(uri=url_parsed)
-    return q
+    return str(q)
 
 def removeNewlineAndTrim(string):
     string = string.replace('\n', '')
@@ -52,12 +55,14 @@ class Result:
     depth = -1
     subLinks = set()
     stepsFromRoot = -1
-
-    # def __hash__(self):
-    #     return hash( tuple(self.url, self.httpCode, self.httpMessage, self.urlengthl, self.fetchTime, self.message, self.depth) )
+    isRoot = False
 
     def httpStatus(self):
-        return f'{self.httpCode} {http.client.responses[self.httpCode]}'
+        try:
+            return f'{self.httpCode} {http.client.responses[self.httpCode]}'
+        except Exception as e:
+            log.error(f'{str(e)}')
+            return f'{self.httpCode} {str(e)}'
 
     def __hash__(self):
         return hash(self.url)
@@ -68,23 +73,25 @@ class Result:
 
         return self.url == other.url
 
-
     def __str__(self):
-        return space(self.stepsFromRoot * 2) + f'{self.httpCode: 4d} {http.client.responses[self.httpCode]:<20}{self.length: 7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}]\t[ {getPath(self.url)}{getQuery(self.url)} ] ( {self.message} )'
-
+        link = getHost(self.url) if self.isRoot else getPath(self.url) + getQuery(self.url)
+        str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ] ( {self.message} )'
+        if self.httpCode == 200:
+            return log.ansi_esc(log.Style.GREEN, str)
+        elif self.httpCode > 499:
+            return log.ansi_esc(log.Style.RED, str)
+        else:
+            return log.ansi_esc(log.Style.YELLOW, str)
 
 
 # Takes a html-doc and returns a set of the included links
-def linkSetParser(doc):
-
+def linkSetParser(soup):
     try:
-        parsed = BeautifulSoup(doc, 'html.parser')
-
         # Get any links if the url points at an html page
-        linkList = parsed("a")
-        imgList = parsed('img')
-        scriptList = parsed('script')
-        styleList = parsed('link')
+        linkList = soup("a")
+        imgList = soup('img')
+        scriptList = soup('script')
+        styleList = soup('link')
 
         linkList = set(map (lambda l: l.get('href'), linkList))
         styleList = set(map (lambda l: l.get('href'), styleList))
@@ -94,7 +101,7 @@ def linkSetParser(doc):
         # Create one set with all links
         allLinks = set()
         allLinks.update(linkList)
-        # allLinks.update(imgList)
+        allLinks.update(imgList)
         allLinks.update(scriptList)
         allLinks.update(styleList)
         
@@ -107,7 +114,7 @@ def linkSetParser(doc):
         log.error(str(e))
         return set()
 
-def urlTest(url):
+def urlTest(url, _timeout=1.0):
 
     result = Result()
     result.url = url
@@ -117,16 +124,33 @@ def urlTest(url):
         fetchTime = time.time()
 
         # THE TEST OF THE URL
-        r = requests.get(url)
+        r = requests.get(url, timeout = _timeout)
 
         # result.depth = goDownSteps
         result.fetchTime = time.time() - fetchTime
         result.httpCode = r.status_code
-        result.subLinks = linkSetParser(r.content)
-        result.length =len(r.content)
+
+        # log.good(r.headers['Content-Type'])
+
+        if "image" not in r.headers['Content-Type']:
+
+            soup = BeautifulSoup(r.content, 'html.parser')
+            result.subLinks = linkSetParser(soup)
+
+            try:
+                result.message = soup.title.text
+            except Exception as e:
+                result.message = str(e)
+
+        else:
+            log.warn(f'Skipping img...')
+
+        result.length = len(r.content)
     except Exception as e:
         log.error(str(e))
         result.message = str(e)
+
+    # log.info( f'{result.httpStatus()} - {getPath(url)}{getQuery(url)}' )
     
     return result
 
@@ -139,6 +163,7 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot):
     urls.add(baseUrl)
     r.depth = depth
     r.stepsFromRoot = stepsFromRoot
+    r.isRoot = True
     resultSet = set()
     resultSet.add(r)
     for link in r.subLinks:
@@ -176,7 +201,6 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot):
 
     # THE TEST OF THE URL
     r = urlTest(baseUrl)
-    log.info( f'{r.httpStatus()} - {getPath(baseUrl)}{getQuery(baseUrl)}' )
 
     urls.add(baseUrl)
 
@@ -221,17 +245,14 @@ def main():
         totalTime = time.time()
         urls = set()
         results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0 )
-        # print (f'{len(results)} links was tested in {time.time() - totalTime:.2f} seconds:')
         print ("-----------------------------------------------------")
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
         print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
         print ("-----------------------------------------------------")
         elapsed = time.time() - totalTime
-        print (f'{len(resSort)} link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
-
+        print (f'{len(resSort)} unique link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
         average = sum(r.fetchTime for r in results) / len (results)
-        print (f'{len(urls)} unique link(s)')
         print (f'Average fetch time {average:.2f} seconds')
 
     except Exception as e:
@@ -241,5 +262,6 @@ def main():
 
 
 if __name__ == '__main__':
+    log.blue (f'Python {sys.version}')
     main()
 
