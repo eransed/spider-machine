@@ -1,7 +1,10 @@
 import time
+from datetime import datetime
 import inspect
 from pathlib import Path
 import traceback
+
+log_timer = time.time()
 
 class Enabled:
     info = True
@@ -14,6 +17,16 @@ class Enabled:
 
 def getFields(cls):
     return list(filter(lambda x: not x[0].startswith('__'), list(vars(cls).items())))
+
+def setEnabledLogs(on):
+    Enabled.info = on
+    Enabled.note = on
+    Enabled.blue = on
+    Enabled.good = on
+    Enabled.warn = on
+    Enabled.error = on
+    Enabled.fatal = on
+
 
 class Style:
     # Explicit
@@ -40,26 +53,34 @@ def ansi_esc(code, format, nested=False):
     else:
         return f'\033[{code}m{format}'
 
+
 # Should only be called from an function in the log.py module
 def _printer(style, format, enabled = True):
     if enabled == False: return
-    start = time.time()
-    t = time.strftime('%H:%M:%S', time.localtime(time.time()))
+    # start = time.time()
+    # t = time.strftime('%H:%M:%S.%f', time.localtime(time.time()))
+    # t = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    t = datetime.today().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     frame = None
     try:
+        global log_timer
         frame = inspect.stack()[2][0]
         info = inspect.getframeinfo(frame)
         function = info.function
         line = info.lineno
         module = Path(info.filename).name.split(sep=".", maxsplit=1)[0]
-        print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}][{t} ({time.time() - start:.3f}s)][{module}.{function}:{line}] {format}'), flush=True)
+        # elapsed = f'{time.time() - start:.3f}s'
+        sinceLastLog = f'{time.time() - log_timer:.3f}s'
+        print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}][{t}][{sinceLastLog}][{module}.{function}:{line}] {format}'), flush=True)
+        log_timer = time.time()
 
     except Exception as e:
         print (f'An logging error occured: {str(e)}')
         # traceback.print_exc()
 
     finally:
-        del frame
+        if frame is not None:
+            del frame
 
 
 def info(format, bypass_enabled = False):
@@ -98,18 +119,34 @@ def getEnabled(nested = False):
         val = li[i][1]
         key = li[i][0].upper()
         if val == False:
-            out += ansi_esc(bg(Style.RED), f'{key}={val}', nested)
+            out += ansi_esc(Style.YELLOW, f'{key}={val}', nested)
         else:
             out += f'{key}={val}'
         out += " "
 
     return out
 
+def printEnabled():
+    print (f'Enabled log levels: {getEnabled()}')
+
+
 def _test():
+    setEnabledLogs(True)
     info("This is a info message")
+    blue("This is a blue message")
+    note("This is a note message")
+    good("This is a good message")
+    internal("This is a internal message")
     warn("This is a warning message")
     error("This is a error message")
     fatal("This is a fatal message")
+    setting = Enabled.warn
+    Enabled.warn = False
+    printEnabled()
+    warn("This is a warning message, bypassing enabled", True)
+    Enabled.warn = setting
+
+
 
 def _styleTest():
     for i in range(40):
@@ -124,5 +161,4 @@ if __name__ == '__main__':
 else:
     pass
 
-print (f'Enabled log levels: {getEnabled()}')
-
+printEnabled()

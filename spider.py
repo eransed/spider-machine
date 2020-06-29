@@ -8,6 +8,8 @@ import http.client
 from bs4 import BeautifulSoup
 import math
 from functools import reduce
+import traceback
+
 
 # OWN
 import log
@@ -31,6 +33,8 @@ def getHost(url):
 def getPath(url):
     url_parsed = urlparse(url)
     path = "{uri.path}".format(uri=url_parsed)
+    if str(path) == "":
+        return "/"
     return str(path)
 
 def getQuery(url):
@@ -51,7 +55,7 @@ class Result:
     httpMessage = "__NONE__"
     length = -1
     fetchTime = -1
-    message = "__NONE__"
+    message = None
     depth = -1
     subLinks = set()
     stepsFromRoot = -1
@@ -74,8 +78,12 @@ class Result:
         return self.url == other.url
 
     def __str__(self):
-        link = getHost(self.url) if self.isRoot else getPath(self.url) + getQuery(self.url)
-        str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ] ( {self.message} )'
+        # link = getHost(self.url) if self.isRoot else getPath(self.url) + getQuery(self.url)
+        link = getPath(self.url)
+        if self.message is None:
+            self.message = ""
+
+        str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ]   {self.message}'
         if self.httpCode == 200:
             return log.ansi_esc(log.Style.GREEN, str)
         elif self.httpCode > 499:
@@ -132,7 +140,7 @@ def urlTest(url, _timeout=1):
 
         # log.good(r.headers['Content-Type'])
 
-        if "image" not in r.headers['Content-Type']:
+        if "html" in r.headers['Content-Type']:
 
             soup = BeautifulSoup(r.content, 'html.parser')
             result.subLinks = linkSetParser(soup)
@@ -159,7 +167,7 @@ def urlTest(url, _timeout=1):
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
 def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1):
     log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s')
-    log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, (getHost(baseUrl))}')
+    log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, getHost(baseUrl))}')
 
     r = urlTest(baseUrl, timeout)
     log.info( f'{r.httpStatus()} - {baseUrl}' )
@@ -247,20 +255,28 @@ def main():
     try:
         totalTime = time.time()
         urls = set()
-        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0, timeout=int(sys.argv[3]) )
+
+        timeout = 1
+        try:
+            timeout = int(sys.argv[3])
+        except:
+            pass
+
+        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0, timeout )
         print ("-----------------------------------------------------")
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
         print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
         print ("-----------------------------------------------------")
         elapsed = time.time() - totalTime
-        print (f'{len(resSort)} unique link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
+        log.info (f'{len(resSort)} unique link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
         average = sum(r.fetchTime for r in results) / len (results)
-        print (f'Average fetch time {average:.2f} seconds')
+        log.info (f'Average fetch time {average:.2f} seconds')
 
     except Exception as e:
         print (str(e))
-        print ("Usage: python spider.py <url> <max-depth>")
+        traceback.print_exc()
+        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout>")
         exit(1)
 
 
