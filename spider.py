@@ -114,7 +114,7 @@ def linkSetParser(soup):
         log.error(str(e))
         return set()
 
-def urlTest(url, _timeout=1.0):
+def urlTest(url, _timeout=1):
 
     result = Result()
     result.url = url
@@ -157,8 +157,11 @@ def urlTest(url, _timeout=1.0):
 
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (baseUrl, depth, urls, stepsFromRoot):
-    r = urlTest(baseUrl)
+def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1):
+    log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s')
+    log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, (getHost(baseUrl))}')
+
+    r = urlTest(baseUrl, timeout)
     log.info( f'{r.httpStatus()} - {baseUrl}' )
     urls.add(baseUrl)
     r.depth = depth
@@ -181,14 +184,14 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot):
             continue
 
         # log.good(f'Fetching sublinks for {url}')
-        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1)
+        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1, timeout)
 
     return resultSet
 
 
 
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot):
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, timeout=1):
 
     # BASE CASE
     if goDownSteps < 1:
@@ -200,7 +203,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot):
         return resultsSet
 
     # THE TEST OF THE URL
-    r = urlTest(baseUrl)
+    r = urlTest(baseUrl, timeout)
 
     urls.add(baseUrl)
 
@@ -227,7 +230,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot):
 
             # RECURSIVE CALL
             # log.info(f'Fetching sublinks at depth {goDownSteps} for {url}')
-            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls, stepsFromRoot + 1)
+            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls, stepsFromRoot + 1, timeout)
             
         except Exception as e:
             log.error(str(e))
@@ -244,7 +247,7 @@ def main():
     try:
         totalTime = time.time()
         urls = set()
-        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0 )
+        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0, timeout=int(sys.argv[3]) )
         print ("-----------------------------------------------------")
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)

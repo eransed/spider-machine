@@ -5,6 +5,7 @@ import traceback
 
 class Enabled:
     info = True
+    note = True
     blue = True
     good = True
     warn = False
@@ -13,23 +14,6 @@ class Enabled:
 
 def getFields(cls):
     return list(filter(lambda x: not x[0].startswith('__'), list(vars(cls).items())))
-
-# def getClassFields(cls):
-#     return [attr for attr in dir(cls) if not callable(getattr(cls, attr)) and not attr.startswith("__")]
-
-# def classFields (cls):
-#     # return [attr for attr in vars(cls).items() if not callable(getattr(cls, attr)) and not attr.startswith("__")]
-#     return vars(cls).items()
-
-# def cf(cls):
-#     fields = list()
-#     for attr, value in cls.:
-#         fields.append(f'{attr}={value}')
-
-#     return fields
-
-# def clsFlds (cls):
-#     return vars(cls.__class__).items()
 
 class Style:
     # Explicit
@@ -50,8 +34,11 @@ def bright(fg_code):
 def bg(fg_code):
     return fg_code + 10
 
-def ansi_esc(code, format):
-    return f'\033[{code}m{format}\033[m'
+def ansi_esc(code, format, nested=False):
+    if nested == False:
+        return f'\033[{code}m{format}\033[m'
+    else:
+        return f'\033[{code}m{format}'
 
 # Should only be called from an function in the log.py module
 def _printer(style, format, enabled = True):
@@ -75,25 +62,26 @@ def _printer(style, format, enabled = True):
         del frame
 
 
+def info(format, bypass_enabled = False):
+    _printer(Style.NORMAL, format, Enabled.info or bypass_enabled)
 
-def info(format):
-    _printer(Style.NORMAL, format, Enabled.info)
+def note(format, bypass_enabled = False):
+    _printer(Style.MAGENTA, format, Enabled.note or bypass_enabled)
 
-def blue(format):
-    _printer(Style.BLUE, format, Enabled.blue)
+def blue(format, bypass_enabled = False):
+    _printer(Style.BLUE, format, Enabled.blue or bypass_enabled)
 
-def good(format):
-    _printer(Style.GREEN, format, Enabled.good)
+def good(format, bypass_enabled = False):
+    _printer(Style.GREEN, format, Enabled.good or bypass_enabled)
 
-def warn(format):
-    _printer(Style.YELLOW, format, Enabled.warn)
+def warn(format, bypass_enabled = False):
+    _printer(Style.YELLOW, format, Enabled.warn or bypass_enabled)
 
-def error(format):
-    _printer(Style.RED, format, Enabled.error)
+def error(format, bypass_enabled = False):
+    _printer(Style.RED, format, Enabled.error or bypass_enabled)
 
-def fatal(format):
-    _printer(bright(bg(Style.RED)), format, Enabled.fatal)
-
+def fatal(format, bypass_enabled = False):
+    _printer(bright(bg(Style.RED)), format, Enabled.fatal or bypass_enabled)
 
 
 # Internal stuff
@@ -102,6 +90,20 @@ def log(format):
 
 def internal(format):
     _printer(Style.INVERTED, format, True)
+
+def getEnabled(nested = False):
+    li = getFields(Enabled)
+    out = ""
+    for i in range(len (li)):
+        val = li[i][1]
+        key = li[i][0].upper()
+        if val == False:
+            out += ansi_esc(bg(Style.RED), f'{key}={val}', nested)
+        else:
+            out += f'{key}={val}'
+        out += " "
+
+    return out
 
 def _test():
     info("This is a info message")
@@ -117,9 +119,10 @@ def _styleTest():
         _printer(bright(bg(i)), f'Style test bright(bg({i}))')
 
 if __name__ == '__main__':
-    _styleTest()
+    # _styleTest()
     _test()
 else:
-    internal (f'Enabled log levels: {getFields(Enabled)}')
+    pass
 
+print (f'Enabled log levels: {getEnabled()}')
 
