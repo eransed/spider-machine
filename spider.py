@@ -10,7 +10,6 @@ import math
 from functools import reduce
 import traceback
 
-
 # OWN
 import log
 
@@ -280,7 +279,7 @@ def main():
         # Error handling
         print (str(e))
         traceback.print_exc()
-        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout>")
+        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout> <use-colors>")
         exit(1)
 
 # Entry point
