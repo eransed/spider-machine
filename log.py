@@ -5,6 +5,7 @@ from pathlib import Path
 import traceback
 
 log_timer = time.time()
+ansi_colors = True
 
 class Enabled:
     info = True
@@ -48,6 +49,8 @@ def bg(fg_code):
     return fg_code + 10
 
 def ansi_esc(code, format, nested=False):
+    global ansi_colors
+    if ansi_colors == False: return format
     if nested == False:
         return f'\033[{code}m{format}\033[m'
     else:
@@ -155,6 +158,14 @@ def _styleTest():
         _printer(bright(i), f'Style test bright({i})')
         _printer(bright(bg(i)), f'Style test bright(bg({i}))')
 
+def parseIntArg(arg, index, default):
+    try:
+        return int(arg[index])
+    except:
+        return default
+
+
+
 if __name__ == '__main__':
     # _styleTest()
     _test()
@@ -162,3 +173,4 @@ else:
     pass
 
 printEnabled()
+internal(f'Using colors: {ansi_colors}')

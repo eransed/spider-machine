@@ -79,7 +79,7 @@ class Result:
 
     def __str__(self):
         # link = getHost(self.url) if self.isRoot else getPath(self.url) + getQuery(self.url)
-        link = getPath(self.url)
+        link = getPath(self.url) + getQuery(self.url)
         if self.message is None:
             self.message = ""
 
@@ -251,18 +251,20 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
 
 
 def main():
-
     try:
+
+        # Timer
         totalTime = time.time()
-        urls = set()
 
-        timeout = 1
-        try:
-            timeout = int(sys.argv[3])
-        except:
-            pass
+        # Args
+        depth = log.parseIntArg(sys.argv, 2, 1)
+        timeout = log.parseIntArg(sys.argv, 3, 1)
+        if log.parseIntArg(sys.argv, 4, 1) < 1: log.ansi_colors = False
 
-        results = threadedFetcher( sys.argv[1], int(sys.argv[2]), urls, 0, timeout )
+        # Fetcher
+        results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout )
+
+        # Results
         print ("-----------------------------------------------------")
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
@@ -274,12 +276,14 @@ def main():
         log.info (f'Average fetch time {average:.2f} seconds')
 
     except Exception as e:
+
+        # Error handling
         print (str(e))
         traceback.print_exc()
         print ("Usage: python spider.py <url> <max-depth> <fetch-timeout>")
         exit(1)
 
-
+# Entry point
 if __name__ == '__main__':
     log.blue (f'Python {sys.version}')
     main()
