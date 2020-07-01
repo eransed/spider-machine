@@ -85,7 +85,7 @@ class Result:
         str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ]   {self.message}'
         if self.httpCode == 200:
             return log.ansi_esc(log.Style.GREEN, str)
-        elif self.httpCode > 499:
+        elif self.httpCode > 499 or self.httpCode == 404:
             return log.ansi_esc(log.Style.RED, str)
         else:
             return log.ansi_esc(log.Style.YELLOW, str)
@@ -164,8 +164,8 @@ def urlTest(url, _timeout=1):
 
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1):
-    log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s')
+def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True):
+    log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s, only unique {only_never_seen_urls}')
     log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, getHost(baseUrl))}')
 
     r = urlTest(baseUrl, timeout)
@@ -180,7 +180,7 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1):
         if link is None:
             continue
 
-        if link in urls:
+        if link in urls and only_never_seen_urls:
             continue
 
         url = urljoin(baseUrl, link)
@@ -191,21 +191,21 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1):
             continue
 
         # log.good(f'Fetching sublinks for {url}')
-        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1, timeout)
+        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1, timeout, only_never_seen_urls)
 
     return resultSet
 
 
 
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, timeout=1):
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True):
 
     # BASE CASE
     if goDownSteps < 1:
         # log.info("Reached final depth")
         return resultsSet
 
-    if baseUrl in urls:
+    if baseUrl in urls and only_never_seen_urls:
         # log.info(f'Already checked {baseUrl}')
         return resultsSet
 
@@ -223,7 +223,7 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
         if link is None:
             continue
 
-        if link in urls:
+        if link in urls and only_never_seen_urls:
             continue
 
         url = urljoin(baseUrl, link)
@@ -258,10 +258,11 @@ def main():
         # Args
         depth = log.parseIntArg(sys.argv, 2, 1)
         timeout = log.parseIntArg(sys.argv, 3, 1)
-        if log.parseIntArg(sys.argv, 4, 1) < 1: log.ansi_colors = False
+        only_unique = log.parseIntArg(sys.argv, 4, 1) == 1
+        if log.parseIntArg(sys.argv, 5, 1) < 1: log.ansi_colors = False
 
         # Fetcher
-        results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout )
+        results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique)
 
         # Results
         print ("-----------------------------------------------------")
@@ -270,7 +271,7 @@ def main():
         print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
         print ("-----------------------------------------------------")
         elapsed = time.time() - totalTime
-        log.info (f'{len(resSort)} unique link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
+        log.info (f'{len(resSort)}{" " if only_unique==False else " unique "}link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
         average = sum(r.fetchTime for r in results) / len (results)
         log.info (f'Average fetch time {average:.2f} seconds')
 
@@ -279,7 +280,7 @@ def main():
         # Error handling
         print (str(e))
         traceback.print_exc()
-        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout> <use-colors>")
+        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout> <only-unique> <use-colors>")
         exit(1)
 
 # Entry point

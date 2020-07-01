@@ -174,3 +174,5 @@ else:
 
 printEnabled()
 internal(f'Using colors: {ansi_colors}')
+note("Testing UTF-8: å ä ö Å Ä Ö")
+
