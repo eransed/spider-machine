@@ -14,9 +14,9 @@ import traceback
 import log
 
 def space(count):
-    return charRepet(count, " ")
+    return charRepeat(count, " ")
 
-def charRepet(count, char):
+def charRepeat(count, char):
     s = ""
     for _ in range(count):
         s = s + char
@@ -47,6 +47,12 @@ def removeNewlineAndTrim(string):
     string = string.strip()
     return string
 
+def httpReasonPhrase(code):
+    return http.client.responses[code]
+
+def httpscrp(code):
+    return f'{code} {http.client.responses[code]}'
+    
 
 class Result:
     url = None
@@ -85,8 +91,10 @@ class Result:
         str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ]   {self.message}'
         if self.httpCode == 200:
             return log.ansi_esc(log.Style.GREEN, str)
-        elif self.httpCode > 499 or self.httpCode == 404:
+        elif self.httpCode == 404:
             return log.ansi_esc(log.Style.RED, str)
+        elif self.httpCode > 499:
+            return log.ansi_esc(log.bg(log.Style.RED), str)
         else:
             return log.ansi_esc(log.Style.YELLOW, str)
 
@@ -113,6 +121,7 @@ def linkSetParser(soup):
         allLinks.update(styleList)
         
         # Filter the None value if present
+        # Use set() to only return the unique links
         allLinks = set(filter(lambda n: n is not None, allLinks))
 
         return allLinks
@@ -265,15 +274,22 @@ def main():
         results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique)
 
         # Results
-        print ("-----------------------------------------------------")
+        divider = charRepeat(100, "-")
+        print (divider)
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
         print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
-        print ("-----------------------------------------------------")
+        print (divider)
         elapsed = time.time() - totalTime
         log.info (f'{len(resSort)}{" " if only_unique==False else " unique "}link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
         average = sum(r.fetchTime for r in results) / len (results)
         log.info (f'Average fetch time {average:.2f} seconds')
+
+        log.info (log.ansi_esc(log.Style.GREEN, f' Number of {httpscrp(200)}: {len(list(filter(lambda r: r.httpCode == 200, results)))} '))
+        log.info (log.ansi_esc(log.Style.YELLOW, f' Number of {httpscrp(400)}: {len(list(filter(lambda r: r.httpCode == 400, results)))} '))
+        log.info (log.ansi_esc(log.Style.RED, f' Number of {httpscrp(404)}: {len(list(filter(lambda r: r.httpCode == 404, results)))} '))
+        log.info (log.ansi_esc(log.bg(log.Style.RED), f' Number of (any) {httpscrp(500)}: {len(list(filter(lambda r: r.httpCode > 499, results)))} '))
+        print (divider)
 
     except Exception as e:
 
