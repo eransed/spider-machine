@@ -5,3 +5,4 @@ settings.json
 *.spec
 dist/
 build/
+output/

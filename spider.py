@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import math
 from functools import reduce
 import traceback
+import operator
 
 # OWN
 import log
@@ -256,7 +257,8 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
 
     return resultsSet
 
-
+def httpCodeCounter(results, code, style, operator):
+    return log.ansi_esc(style, f' Number of {httpscrp(code)}: {len(list(filter(lambda r: operator(r.httpCode, code), results)))} ')
 
 def main():
     try:
@@ -289,6 +291,11 @@ def main():
         log.info (log.ansi_esc(log.Style.YELLOW, f' Number of {httpscrp(400)}: {len(list(filter(lambda r: r.httpCode == 400, results)))} '))
         log.info (log.ansi_esc(log.Style.RED, f' Number of {httpscrp(404)}: {len(list(filter(lambda r: r.httpCode == 404, results)))} '))
         log.info (log.ansi_esc(log.bg(log.Style.RED), f' Number of (any) {httpscrp(500)}: {len(list(filter(lambda r: r.httpCode > 499, results)))} '))
+
+        print (divider)
+        log.info (httpCodeCounter(results, 200, log.Style.GREEN, operator.eq))
+        log.info (httpCodeCounter(results, 400, log.Style.GREEN, operator.eq))
+        log.info (httpCodeCounter(results, 404, log.Style.GREEN, operator.eq))
         print (divider)
 
     except Exception as e:
