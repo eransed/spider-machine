@@ -3,6 +3,8 @@ from datetime import datetime
 import inspect
 from pathlib import Path
 import traceback
+import threading
+
 
 log_timer = time.time()
 ansi_colors = True
@@ -74,7 +76,7 @@ def _printer(style, format, enabled = True):
         module = Path(info.filename).name.split(sep=".", maxsplit=1)[0]
         # elapsed = f'{time.time() - start:.3f}s'
         sinceLastLog = f'{time.time() - log_timer:.3f}s'
-        print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}][{t}][{sinceLastLog}][{module}.{function}:{line}] {format}'), flush=True)
+        print (ansi_esc(style, f'[{inspect.stack()[1].function.upper()}] [{t}] [{sinceLastLog}] [{module}.{function}:{line}] [{threading.currentThread().getName()}] {format}'), flush=True)
         log_timer = time.time()
 
     except Exception as e:

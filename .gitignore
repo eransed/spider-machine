@@ -6,3 +6,4 @@ settings.json
 dist/
 build/
 output/
+*_notrack.*

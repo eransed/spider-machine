@@ -10,12 +10,14 @@ import math
 from functools import reduce
 import traceback
 import operator
+import pprint
 
 # OWN
 import log
 
 def space(count):
     return charRepeat(count, " ")
+
 
 def charRepeat(count, char):
     s = ""
@@ -25,10 +27,17 @@ def charRepeat(count, char):
     return s
 
 
+def chunks(lst, n):
+    # Yield successive n-sized chunks from lst.
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 def getHost(url):
     url_parsed = urlparse(url)
     host = "{uri.scheme}://{uri.netloc}/".format(uri=url_parsed)
     return str(host)
+
 
 def getPath(url):
     url_parsed = urlparse(url)
@@ -37,10 +46,12 @@ def getPath(url):
         return "/"
     return str(path)
 
+
 def getQuery(url):
     url_parsed = urlparse(url)
     q = "{uri.query}".format(uri=url_parsed)
     return str(q)
+
 
 def removeNewlineAndTrim(string):
     string = string.replace('\n', '')
@@ -48,8 +59,10 @@ def removeNewlineAndTrim(string):
     string = string.strip()
     return string
 
+
 def httpReasonPhrase(code):
     return http.client.responses[code]
+
 
 def httpscrp(code):
     return f'{code} {http.client.responses[code]}'
@@ -174,9 +187,10 @@ def urlTest(url, _timeout=1):
 
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True):
+def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True, threadCount=2):
     log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s, only unique {only_never_seen_urls}')
     log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, getHost(baseUrl))}')
+    log.note(f'Using {threadCount} threads')
 
     r = urlTest(baseUrl, timeout)
     log.info( f'{r.httpStatus()} - {baseUrl}' )
@@ -186,6 +200,16 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_
     r.isRoot = True
     resultSet = set()
     resultSet.add(r)
+
+    # Calculate taskSize, dependant on threadCount
+    taskSize = math.floor(len(r.subLinks) / threadCount)
+    taskList = list(chunks(list(r.subLinks), taskSize))
+
+    pprint.pprint(taskList)
+    log.note(f'A total of {len(r.subLinks)} links in {baseUrl} will be handled')
+    log.note(f'{len(taskList)} thread(s) will each recursively handle {taskSize} urls')
+
+
     for link in r.subLinks:
         if link is None:
             continue
@@ -270,10 +294,11 @@ def main():
         depth = log.parseIntArg(sys.argv, 2, 1)
         timeout = log.parseIntArg(sys.argv, 3, 1)
         only_unique = log.parseIntArg(sys.argv, 4, 1) == 1
+        threads = log.parseIntArg(sys.argv, 5, 1)
         if log.parseIntArg(sys.argv, 5, 1) < 1: log.ansi_colors = False
 
         # Fetcher
-        results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique)
+        results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique, threads)
 
         # Results
         divider = charRepeat(100, "-")
