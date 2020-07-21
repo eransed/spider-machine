@@ -1,6 +1,6 @@
 # Imse 0.0.1
 
-# STD
+# Standard modules
 import sys
 import time
 import requests
@@ -30,7 +30,7 @@ def getBanner():
     return f'{getName()} Version {getVersion()}'
 
 def getUsage():
-    usage = "Usage: python spider.py <url> <max-depth> <fetch-timeout> <only-unique> <use-colors> <number-of-threads>"
+    usage = "Usage: python spider.py <url> [<max-depth> <fetch-timeout> <only-unique> <use-colors> <number-of-threads>]"
     return usage
 
 def checkArgs():
@@ -43,7 +43,7 @@ checkArgs()
 
 
 
-# OWN IMPORTS
+# Project modules
 import log
 import util
 
