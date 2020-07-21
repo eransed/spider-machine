@@ -1,9 +1,11 @@
+# Imse 0.0.1
+
 # STD
 import sys
 import time
 import requests
 from requests.compat import urljoin
-from requests.compat import urlparse
+# from requests.compat import urlparse
 import http.client
 from bs4 import BeautifulSoup
 import math
@@ -11,64 +13,45 @@ from functools import reduce
 import traceback
 import operator
 import pprint
+import threading
+from threading import Thread
 
-# OWN
+def getVersion():
+    version_major = 0
+    version_minor = 0
+    version_patch = 1
+    return f'{version_major}.{version_minor}.{version_patch}'
+
+def getName():
+    name = "Imse"
+    return name
+
+def getBanner():
+    return f'{getName()} Version {getVersion()}'
+
+def getUsage():
+    usage = "Usage: python spider.py <url> <max-depth> <fetch-timeout> <only-unique> <use-colors> <number-of-threads>"
+    return usage
+
+def checkArgs():
+    if len(sys.argv) < 2:
+        print (f'\n{getUsage()}\n')
+        sys.exit(-1)
+
+print (getBanner())
+checkArgs()
+
+
+
+# OWN IMPORTS
 import log
+import util
 
-def space(count):
-    return charRepeat(count, " ")
-
-
-def charRepeat(count, char):
-    s = ""
-    for _ in range(count):
-        s = s + char
-
-    return s
-
-
-def chunks(lst, n):
-    # Yield successive n-sized chunks from lst.
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
-
-def getHost(url):
-    url_parsed = urlparse(url)
-    host = "{uri.scheme}://{uri.netloc}/".format(uri=url_parsed)
-    return str(host)
-
-
-def getPath(url):
-    url_parsed = urlparse(url)
-    path = "{uri.path}".format(uri=url_parsed)
-    if str(path) == "":
-        return "/"
-    return str(path)
-
-
-def getQuery(url):
-    url_parsed = urlparse(url)
-    q = "{uri.query}".format(uri=url_parsed)
-    return str(q)
-
-
-def removeNewlineAndTrim(string):
-    string = string.replace('\n', '')
-    string = string.replace('\r', '')
-    string = string.strip()
-    return string
-
-
-def httpReasonPhrase(code):
-    return http.client.responses[code]
-
-
-def httpscrp(code):
-    return f'{code} {http.client.responses[code]}'
     
 
 class Result:
+    threadId = None
+    parentUrl = None
     url = None
     httpCode = -1
     httpMessage = "__NONE__"
@@ -98,11 +81,13 @@ class Result:
 
     def __str__(self):
         # link = getHost(self.url) if self.isRoot else getPath(self.url) + getQuery(self.url)
-        link = getPath(self.url) + getQuery(self.url)
+        link = f'{util.getPath(self.url)}{"?"if util.getQuery(self.url) else ""}{util.getQuery(self.url)}'
         if self.message is None:
             self.message = ""
 
-        str = space(self.stepsFromRoot * 2) + f'{self.httpCode:3d} {http.client.responses[self.httpCode]:<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ]   {self.message}'
+
+
+        str = util.space(self.stepsFromRoot * 2) + f'{util.httpscrp(self.httpCode):<20}{self.length:7d} {self.fetchTime: 9.2f}s [d:{self.depth: 2d}][l:{len(self.subLinks): 4d}] [ {link} ]   {self.message}  <---  Linked from {self.parentUrl} [By thread {self.threadId}]'
         if self.httpCode == 200:
             return log.ansi_esc(log.Style.GREEN, str)
         elif self.httpCode == 404:
@@ -178,6 +163,7 @@ def urlTest(url, _timeout=1):
         result.length = len(r.content)
     except Exception as e:
         log.error(str(e))
+        log.error(f'URL that caused this: {url}')
         result.message = str(e)
 
     # log.info( f'{result.httpStatus()} - {getPath(url)}{getQuery(url)}' )
@@ -185,12 +171,27 @@ def urlTest(url, _timeout=1):
     return result
 
 
+class ThreadWithReturnValue(Thread):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs={}, Verbose=None):
+        Thread.__init__(self, group, target, name, args, kwargs)
+        self._return = None
+
+    def run(self):
+        # print(type(self._target))
+        if self._target is not None:
+            self._return = self._target(*self._args, **self._kwargs)
+
+    def join(self, *args):
+        Thread.join(self, *args)
+        return self._return
+
+
 
 # Fetches the links in the doc provided by url recursivly and the optimal amount of threads depending on the machine
-def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True, threadCount=2):
+def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True, threadCount=2, parentUrl=None):
     log.note(f'Start-point {baseUrl}, max-depth {depth}, fetch-timeout {timeout}s, only unique {only_never_seen_urls}')
-    log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, getHost(baseUrl))}')
-    log.note(f'Using {threadCount} threads')
+    log.note(f'Domain to be considered {log.ansi_esc(log.Style.GREEN, util.getHost(baseUrl))}')
+    log.note(f'Using a least {threadCount} threads')
 
     r = urlTest(baseUrl, timeout)
     log.info( f'{r.httpStatus()} - {baseUrl}' )
@@ -198,19 +199,50 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_
     r.depth = depth
     r.stepsFromRoot = stepsFromRoot
     r.isRoot = True
+    r.parentUrl = parentUrl
+    r.threadId = threadId=f'{threading.currentThread().getName()}'
     resultSet = set()
     resultSet.add(r)
 
-    # Calculate taskSize, dependant on threadCount
-    taskSize = math.floor(len(r.subLinks) / threadCount)
-    taskList = list(chunks(list(r.subLinks), taskSize))
-
-    pprint.pprint(taskList)
-    log.note(f'A total of {len(r.subLinks)} links in {baseUrl} will be handled')
-    log.note(f'{len(taskList)} thread(s) will each recursively handle {taskSize} urls')
 
 
-    for link in r.subLinks:
+    if threadCount < 2:
+        log.info("Sequential execution...")
+        resultSet = sequentialListFecther(baseUrl, r.subLinks, depth, resultSet, urls, 1, timeout, only_never_seen_urls)
+
+    else:
+        log.info("Parallel execution...")
+
+        # Calculate taskSize, dependant on threadCount
+        taskSize = math.floor(len(r.subLinks) / threadCount)
+        taskList = list(util.chunks(list(r.subLinks), taskSize))
+
+        # pprint.pprint(taskList)
+        log.note(f'A total of {len(r.subLinks)} links in {baseUrl} will be handled')
+        log.note(f'{len(taskList)} thread(s) will recursively handle a least {taskSize} urls')
+
+        threads = []
+
+        for subList in taskList:
+            funcArgs = [baseUrl, subList, depth, resultSet, urls, stepsFromRoot, timeout, only_never_seen_urls]
+            t = ThreadWithReturnValue(target=sequentialListFecther, args=funcArgs)
+            t.start()
+            threads.append(t)
+            # log.info(f'Thread: {t.getName()} with id {t.ident} got {len(subList)} links to test')
+
+
+        for t in threads:
+            resultSet.update(t.join())
+
+
+    return resultSet
+
+
+
+
+def sequentialListFecther(baseUrl, linkList, depth, resultSet, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True):
+    log.blue (f'Got {len(linkList)} links to test')
+    for link in linkList:
         if link is None:
             continue
 
@@ -219,20 +251,20 @@ def threadedFetcher (baseUrl, depth, urls, stepsFromRoot, timeout=1, only_never_
 
         url = urljoin(baseUrl, link)
 
-        if getHost(baseUrl) not in getHost(url) and baseUrl != url:
+        if util.getHost(baseUrl) not in util.getHost(url) and baseUrl != url:
             # resultsList.append (f'[{getHost(baseUrl)} not in {getHost(url)}]')
             # log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
             continue
 
         # log.good(f'Fetching sublinks for {url}')
-        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1, timeout, only_never_seen_urls)
-
+        resultSet = recursiveFetcher(url, depth - 1, resultSet, urls, 1, timeout, only_never_seen_urls, parentUrl=baseUrl, threadId=f'{threading.currentThread().getName()}')
+    
     return resultSet
 
 
 
 
-def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True):
+def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, timeout=1, only_never_seen_urls=True, parentUrl=None, threadId=None):
 
     # BASE CASE
     if goDownSteps < 1:
@@ -245,12 +277,12 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
 
     # THE TEST OF THE URL
     r = urlTest(baseUrl, timeout)
-
     urls.add(baseUrl)
-
     r.stepsFromRoot = stepsFromRoot
-
     r.depth = goDownSteps
+    r.parentUrl = parentUrl
+    r.threadId = threadId
+    # log.info(str(r))
 
     for link in r.subLinks:
 
@@ -262,16 +294,16 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
 
         url = urljoin(baseUrl, link)
 
-        if getHost(baseUrl) not in getHost(url) and baseUrl != url:
+        if util.getHost(baseUrl) not in util.getHost(url) and baseUrl != url:
             # resultsList.append (f'[{getHost(baseUrl)} not in {getHost(url)}]')
-            log.warn(f'[{getHost(baseUrl)} not in {getHost(url)}]')
+            log.warn(f'[{util.getHost(baseUrl)} not in {util.getHost(url)}]')
             continue
 
         try:
 
             # RECURSIVE CALL
             # log.info(f'Fetching sublinks at depth {goDownSteps} for {url}')
-            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls, stepsFromRoot + 1, timeout)
+            resultsSet = recursiveFetcher(url, goDownSteps - 1, resultsSet, urls, stepsFromRoot + 1, timeout, parentUrl=baseUrl, threadId=threadId)
             
         except Exception as e:
             log.error(str(e))
@@ -281,10 +313,16 @@ def recursiveFetcher(baseUrl, goDownSteps, resultsSet, urls, stepsFromRoot, time
 
     return resultsSet
 
-def httpCodeCounter(results, code, style, operator):
-    return log.ansi_esc(style, f' Number of {httpscrp(code)}: {len(list(filter(lambda r: operator(r.httpCode, code), results)))} ')
+
+
+def httpCodeCountPrinter(results, code, style, operator):
+    count = len(list(filter(lambda r: operator(r.httpCode, code), results)))
+    if count > 0:
+        log.info (log.ansi_esc(style or util.httpCodeColor(code), f' Number of {util.httpscrp(code)}: {count} ({count/len(results)*100:.1f}%) '))
+
 
 def main():
+
     try:
 
         # Timer
@@ -294,33 +332,29 @@ def main():
         depth = log.parseIntArg(sys.argv, 2, 1)
         timeout = log.parseIntArg(sys.argv, 3, 1)
         only_unique = log.parseIntArg(sys.argv, 4, 1) == 1
-        threads = log.parseIntArg(sys.argv, 5, 1)
         if log.parseIntArg(sys.argv, 5, 1) < 1: log.ansi_colors = False
+        threads = log.parseIntArg(sys.argv, 6, 1)
 
         # Fetcher
         results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique, threads)
 
         # Results
-        divider = charRepeat(100, "-")
+        divider = util.charRepeat(100, "-")
         print (divider)
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
-        print ( "\n".join( list( map( lambda r: str( r ), resSort ) ) ) )
+        toShow = list (filter (lambda x: x.httpCode is not 200, resSort))
+        print ( "\n".join( list( map( lambda r: str( r ), toShow ) ) ) )
         print (divider)
         elapsed = time.time() - totalTime
         log.info (f'{len(resSort)}{" " if only_unique==False else " unique "}link(s) was tested in {elapsed:.2f} seconds ({elapsed/60:.1f}m):')
         average = sum(r.fetchTime for r in results) / len (results)
         log.info (f'Average fetch time {average:.2f} seconds')
 
-        log.info (log.ansi_esc(log.Style.GREEN, f' Number of {httpscrp(200)}: {len(list(filter(lambda r: r.httpCode == 200, results)))} '))
-        log.info (log.ansi_esc(log.Style.YELLOW, f' Number of {httpscrp(400)}: {len(list(filter(lambda r: r.httpCode == 400, results)))} '))
-        log.info (log.ansi_esc(log.Style.RED, f' Number of {httpscrp(404)}: {len(list(filter(lambda r: r.httpCode == 404, results)))} '))
-        log.info (log.ansi_esc(log.bg(log.Style.RED), f' Number of (any) {httpscrp(500)}: {len(list(filter(lambda r: r.httpCode > 499, results)))} '))
-
         print (divider)
-        log.info (httpCodeCounter(results, 200, log.Style.GREEN, operator.eq))
-        log.info (httpCodeCounter(results, 400, log.Style.GREEN, operator.eq))
-        log.info (httpCodeCounter(results, 404, log.Style.GREEN, operator.eq))
+        for httpCode in range(600):
+            httpCodeCountPrinter(results, httpCode, None, operator.eq)
+
         print (divider)
 
     except Exception as e:
@@ -328,7 +362,7 @@ def main():
         # Error handling
         print (str(e))
         traceback.print_exc()
-        print ("Usage: python spider.py <url> <max-depth> <fetch-timeout> <only-unique> <use-colors>")
+        print (getUsage())
         exit(1)
 
 # Entry point
