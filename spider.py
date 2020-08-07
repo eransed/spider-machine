@@ -38,7 +38,8 @@ def checkArgs():
         print (f'\n{getUsage()}\n')
         sys.exit(-1)
 
-print (getBanner())
+# Versions and arg check
+print (f'{getBanner()} running on Python {sys.version}')
 checkArgs()
 
 
@@ -343,7 +344,7 @@ def main():
         print (divider)
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
-        toShow = list (filter (lambda x: x.httpCode is not 200, resSort))
+        toShow = list (filter (lambda x: x.httpCode != 200, resSort))
         print ( "\n".join( list( map( lambda r: str( r ), toShow ) ) ) )
         print (divider)
         elapsed = time.time() - totalTime
@@ -367,6 +368,5 @@ def main():
 
 # Entry point
 if __name__ == '__main__':
-    log.blue (f'Python {sys.version}')
     main()
 
