@@ -43,7 +43,6 @@ print (f'{getBanner()} running on Python {sys.version}')
 checkArgs()
 
 
-
 # Project modules
 import log
 import util
@@ -340,7 +339,7 @@ def main():
         results = threadedFetcher( sys.argv[1], depth, set(), 0, timeout, only_unique, threads)
 
         # Results
-        divider = util.charRepeat(100, "-")
+        divider = util.charRepeat(60, "-")
         print (divider)
         resSort = list(results)
         resSort.sort(key=lambda x: x.depth, reverse=True)
